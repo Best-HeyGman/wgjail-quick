@@ -33,13 +33,14 @@ I myself want to make a Fedora/Epel RPM, when I have the time to do so. If you, 
 `wgjail-quick generate-cmd-service [ CONFIG_FILE | INTERFACE ] CMD_LINE`  
 `wgjail-quick generate-portforward-service [ CONFIG_FILE | INTERFACE ] LISTEN_ADDRESS FORWARDED_PORT [ DESTINATION_PORT ]`
 
-CONFIG_FILE is a path to a wireguard configuration file.  
+CONFIG_FILE is a path to a wireguard configuration file. Using an absolute path is a good idea.  
 
-NAMESPACE is basically the name that will be given to:
+INTERFACE is a wireguard config file that is in /etc/wireguard  
+Which means, you only have to write, for example, "p2p" to use the wireguard config file /etc/wireguard/p2p.conf
+
+The portion of the config files basename before the .conf is the name that will be given to:
 1. the network namespace (the "wireguard jail") and
-2. The wireguard interface inside the network namespace. NAMESPACE will be set to the portion of the filename of the wireguard config file before the ".conf" i.e. NAMESPACE.conf.
-
-If, with the "up" command, NAMESPACE was given, instead of CONFIG_FILE, wgjail-quick searches the config file in '/etc/wireguard/NAMESPACE.conf'.
+2. The wireguard interface inside the network namespace.
 
 CMD_LINE is a command with command line arguments that you want to execute in the namespace.
 
