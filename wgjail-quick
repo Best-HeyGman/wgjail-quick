@@ -1,0 +1,268 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# © 2024-2025 Stephan Hegemann
+
+set -e
+
+# For debugging.
+#set -x
+
+# Store the working directory the user was in when he started this program. Important to save the service files there, that are generated.
+initial_pwd=$(pwd)
+
+# In case you didn't know, depending on the set language of the system, [a-z] for example in a regex would match all kinds of umlauts and other characters.
+# By setting the locale to posix, we have a well defined environment and don't have to worry about these kinds of stuff.
+export LC_ALL=POSIX
+
+we_are_root () {
+	if [ $(id -u) -eq 0 ]
+	then
+		return 0
+	else
+		echo "wgjail-quick needs root permissions for this operation (try \"sudo wgjail-quick ...\")"
+		return 1
+	fi
+}
+
+print_help () {
+	echo "
+Usage:
+wgjail-quick [ up | down ] [ CONFIG_FILE | INTERFACE ]
+wgjail-quick exec [ CONFIG_FILE | INTERFACE ] USERNAME CMD_LINE
+wgjail-quick portforward [ CONFIG_FILE | INTERFACE ] LISTEN_ADDRESS FORWARDED_PORT [ DESTINATION_PORT ]
+wgjail-quick generate-jail-service [ CONFIG_FILE | INTERFACE ]
+wgjail-quick generate-cmd-service [ CONFIG_FILE | INTERFACE ] CMD_LINE
+wgjail-quick generate-portforward-service [ CONFIG_FILE | INTERFACE ] LISTEN_ADDRESS FORWARDED_PORT [ DESTINATION_PORT ]
+
+More information in the manpage via 'man wgjail-quick'
+"
+}
+
+# CONFIG_FILE is always on second place for all commands
+config_file="$2"
+namespace_name=$(basename "$config_file" | sed  's/.conf$//')
+interface_name="$namespace_name"
+namespace_name_regex='^[a-zA-Z0-9_=+.-]{1,15}$'
+
+if [ "$config_file" = '' ]
+then
+	print_help
+	exit 1
+elif ! echo "$namespace_name" | grep -q -E "$namespace_name_regex"
+then
+	echo "$config_file is not a valid interface name. Please make sure it looks like this regex: $namespace_name_regex" >&2
+	exit 1
+fi
+
+# If it is an absolute path to a .conf file, it's fine as it is.
+# If just a .conf file was given, prepend the path to where we are right now to make it absolute
+# If just a interface name was given, without path or .conf, assume it is in /etc/wireguard/ , just like wg-quick does.
+if [ "$(echo "$config_file" | grep -E '^/')" = '' ]
+then
+	if [ "$(echo "$config_file" | grep -E '.conf$')" = '' ]
+	then
+		config_file=/etc/wireguard/"$interface_name".conf
+	else
+		config_file="$initial_pwd"/"$config_file"
+	fi
+fi
+
+
+if [ $1 == 'up' ]
+then
+	if ! we_are_root
+	then
+		exit 1
+	fi
+	
+	# We parse the config file
+	local_ip_list="$(cat "$config_file" | tr -d ' ' | tr -d '\t' | awk -F '=' '$1 == "Address" {print $2}' | tr ',' '\n')"
+	if [ "$local_ip_list" == '' ]
+	then
+		echo 'Error, no ip Adress for the wireguard interface found in .conf file. Please add an "Address=" line to the configuration.' >&2
+		exit 1
+	fi
+	dns_server_list="$(cat "$config_file" | tr -d ' ' | tr -d '\t' | awk -F '=' '$1 == "DNS" {print $2}' | tr ',' '\n')"
+	if [ "$dns_server_list" == '' ]
+	then
+		echo 'Error, no DNS Server found in .conf file. If you know that you don`t need one, you can ignore this message. Otherwise, please add a Server via a "DNS=" line to the configuration.' >&2
+	fi
+	
+	# We create the network namespace
+	ip netns add "$namespace_name"
+	
+	# Add a loopback interface
+	ip -n "$namespace_name" link set lo up
+	
+	# add the wireguard interface
+	ip link add "$interface_name" type wireguard
+	
+	# move the interface to the network namespace
+	ip link set "$interface_name" netns "$namespace_name"
+	
+	# The set umask is valid only inside the brackets
+	(
+		umask 077
+		wg-quick strip "$config_file" > /tmp/"$namespace_name".conf
+		ip netns exec "$namespace_name" wg setconf "$interface_name" /tmp/"$namespace_name".conf
+		rm -f /tmp/"$namespace_name".conf
+	)
+
+	# Now we set the ips for the wireguard connection. Also works for IPv6
+	for ip in $local_ip_list
+	do
+		ip -n "$namespace_name" address add "$ip" dev "$namespace_name"
+	done
+	
+	ip -n "$namespace_name" link set "$interface_name" up
+
+	# set the default route in the new namespace
+	ip -n "$namespace_name" route add default dev "$interface_name"
+	
+	# create network namespace resolv.conf
+	mkdir -p /etc/netns/"$namespace_name"
+	for dns_server in $dns_server_list
+	do
+		echo "nameserver $dns_server" >> /etc/netns/"$namespace_name"/resolv.conf
+	done
+	
+elif [ $1 == 'down' ]
+then
+	if ! we_are_root
+	then
+		exit 1
+	fi
+	
+	# delete the network namespace
+	ip netns del "$namespace_name"
+
+	# remove network namespace resolv.conf
+	rm -rf /etc/netns/"$namespace_name"
+
+elif [ $1 == 'exec' ]
+then
+	username="$3"
+	cmdline=$(echo -n "$@" | cut -d ' ' -f 4-)
+	
+	if ! we_are_root
+	then
+		exit 1
+	fi
+	
+	# Not every gui program will work this way. Firefox does not. I worked some time on getting all gui programs to work, but that escalated rather quickly, so I decided to just leave that rabbit hole alone for now. Maybe some other time. If you want to get most gui applications working somewhat, then add "dbus-run-session" before $cmdline. The Program will, however, not be able to output Audio. Also maybe other quirks.
+	# We use Bubblewrap to map the resolv.conf file to where the program expects it to be.
+	ip netns exec "$namespace_name" sudo -u "$username" bwrap --bind / / --bind /etc/netns/"$namespace_name"/resolv.conf /etc/resolv.conf --dev-bind /dev /dev $cmdline
+	
+elif [ $1 == 'portforward' ]
+then
+	listen_address="$3"
+	forwarded_port="$4"
+	dest_port="$5"
+	
+	if [ "$listen_address" == '' ]
+	then
+		echo 'Error: No adress to listen on was given'
+		exit 1
+	elif [ "$forwarded_port" == '' ]
+	then
+		echo 'Error: No port to forward was given'
+		exit 1
+	fi
+	
+	# Default is to use the same port
+	if [ "$dest_port" = '' ]
+	then
+		dest_port="$forwarded_port"
+	fi
+	
+	if ! we_are_root
+	then
+		exit 1
+	fi
+	
+	socat tcp-listen:$forwarded_port,bind=$listen_address,fork,reuseaddr exec:"ip netns exec $namespace_name socat STDIO \"tcp-connect:localhost:$dest_port\"",nofork
+
+elif [ $1 == 'generate-jail-service' ]
+then
+	echo "# copy this file to /etc/systemd/system/
+# this has a hard dependency on wgjail-quick, which must be installed in /usr/bin
+
+[Unit]
+Description=Create network namespace \"$namespace_name\"
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/wgjail-quick up $config_file
+ExecStop=/usr/bin/wgjail-quick down $config_file
+
+[Install]
+WantedBy = multi-user.target" > "$initial_pwd"/wgjail-"$namespace_name".service
+
+elif [ $1 == 'generate-cmd-service' ]
+then
+	given_cmd=$(echo -n "$@" | cut -d ' ' -f 3-)
+	base_cmd=$(basename "$(echo -n $3 | cut -f 1 -d ' ')")
+	
+	echo "# copy this file to /etc/systemd/system/
+[Unit]
+Description=$base_cmd service for user %I in network namespace \"$namespace_name\"
+After=wgjail-$namespace_name.service
+Requires=wgjail-$namespace_name.service
+BindsTo=wgjail-$namespace_name.service
+
+[Service]
+Type=simple
+User=%i
+Group=%i
+UMask=002
+WorkingDirectory=~
+NetworkNamespacePath=/var/run/netns/$namespace_name
+BindReadOnlyPaths=/etc/netns/$namespace_name/resolv.conf:/etc/resolv.conf:norbind
+ExecStart=$given_cmd
+
+[Install]
+WantedBy=multi-user.target" > "$initial_pwd"/wgjail-"$namespace_name"-"$base_cmd"@.service
+
+elif [ $1 == 'generate-portforward-service' ]
+then
+	listen_address="$3"
+	forwarded_port="$4"
+	dest_port="$5"
+	
+	if [ "$listen_address" == '' ]
+	then
+		echo 'Error: No adress to listen on was given'
+		exit 1
+	elif [ "$forwarded_port" == '' ]
+	then
+		echo 'Error: No port to forward was given'
+		exit 1
+	fi
+	
+	# Default is to use the same port
+	if [ "$dest_port" = '' ]
+	then
+		dest_port="$forwarded_port"
+	fi
+	
+	echo "# copy this file to /etc/systemd/system/
+[Unit]
+Description=Forwards $listen_address:$forwarded_port into namespace $namespace_name
+After=wgjail-$namespace_name.service
+Requires=wgjail-$namespace_name.service
+BindsTo=wgjail-$namespace_name.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/socat tcp-listen:$forwarded_port,bind=$listen_address,fork,reuseaddr exec:'ip netns exec $namespace_name socat STDIO \"tcp-connect:localhost:$dest_port\"',nofork
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target" > "$initial_pwd"/wgjail-"$namespace_name"-portforward-"$listen_address"-"$forwarded_port".service
+
+else
+	print_help
+fi
