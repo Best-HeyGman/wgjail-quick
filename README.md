@@ -96,7 +96,7 @@ If you now, for example, have set up a dedicated server to seed your Hannah Mont
 `wgjail-quick generate-portforward-service /path/to/<wireguard_config>.conf 0.0.0.0 6969` 
  
 Now you can copy these systemd files to `/etc/systemd/system` and enable them. The filenames are different depending on how you named your wireguard conf file (just like wg-quick sets the name of the interface it creates according to the filename of the .conf file). If, for example, your wireguard config file was named "my-wg.conf" and the username with which you want to start the qbittorrent server is "myuser", then you can copy and start the services, for example, like this:  
-`sudo cp wgjail-my-wg.service wgjail-my-wg-qbittorrent-nox@.service wgjail-my-wg-portforward-0.0.0.0-6969.service /etc/systemd/system`
+`sudo cp wgjail-my-wg.service wgjail-my-wg-qbittorrent-nox@.service wgjail-my-wg-portforward-0.0.0.0-6969.service /etc/systemd/system`  
 `sudo systemctl enable --now wgjail-my-wg.service wgjail-my-wg-qbittorrent-nox@myuser.service wgjail-my-wg-portforward-0.0.0.0-6969.service`
 
 # Todo
