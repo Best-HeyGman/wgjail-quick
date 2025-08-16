@@ -100,14 +100,17 @@ Now you can copy these systemd files to `/etc/systemd/system` and enable them. T
 `sudo systemctl enable --now wgjail-my-wg.service wgjail-my-wg-qbittorrent-nox@myuser.service wgjail-my-wg-portforward-0.0.0.0-6969.service`
 
 # Todo
-- Make a manpage
-	+ It should probably be enough to convert the "commands" and "usage" portion of this readme to manpage syntax. Maybe there is even a way to do this conversion automatically.
 - Maybe make a "exec-gui" command
 	+ Some gui applications will not work / not work properly when started with the exec command inside a wgjail. The problems for gui programs are:
 		* No connection to dbus
 		* Audio does not work
 	+ Some applications are ok with that, like qbittorrent. Others, like Firefox, won't even start.
 	+ So, I would like to keep the "exec" command the way it works right now and not pile a lot of magic on top, but adding an "exec-gui" command that does that magic would probably be a nice thing to have for many users.
+	
+# Misc
+## Create a manpage from this readme
+This is actually pretty neat, because like this I don't have to update both. First, copy the  "Usage", "Commands" and "Usage Examples" parts to a new markdown file (e.g. tmp.md). Then use pandoc:  
+´pandoc tmp.md -s -o wgjail-quick.8 -t man´
 
 
 
