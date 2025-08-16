@@ -109,8 +109,8 @@ Now you can copy these systemd files to `/etc/systemd/system` and enable them. T
 	
 # Misc
 ## Create a manpage from this readme
-This is actually pretty neat, because like this I don't have to update both. First, copy the  "Usage", "Commands" and "Usage Examples" parts to a new markdown file (e.g. tmp.md). Then use pandoc:  
-´pandoc tmp.md -s -o wgjail-quick.8 -t man´
+This is actually pretty neat. Now I don't have to update both. First, copy the  "Usage", "Commands" and "Usage Examples" parts to a new markdown file (e.g. tmp.md). Then use pandoc:  
+`pandoc tmp.md -s -o wgjail-quick.8 -t man`
 
 
 
