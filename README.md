@@ -23,7 +23,13 @@ To unistall, just: `rm /usr/bin/wgjail-quick`
 
 ## Distribution Packages
 I wrote wgjail-quick with packaging for Linux Distributions in mind, so please feel free to do so for whatever distribution you would like.  
-I myself want to make a Fedora/Epel RPM, when I have the time to do so. If you, however, are already a Fedora package maintainer, I won't complain about less work :)  
+
+### Fedora, CentOS Stream, Red Hat Enterprise Linux, Alma Linux
+I have now made a Copr Repository:  
+https://copr.fedorainfracloud.org/coprs/best-heygman/wgjail-quick/  
+
+In the future, I would like to maintain the package directly in the Fedora / EPEL repositories. No timeframe for that yet.
+
 
 # Usage
 `wgjail-quick [ up | down ] [ CONFIG_FILE | INTERFACE ]`  
@@ -85,6 +91,10 @@ When you're done, close the qbittorrent window, then:
 `sudo wgjail-quick down /path/to/<wireguard_config>.conf`  
 Done, very easy.
 
+## Starting a podman container in the namespace
+If you want to start a container inside the network namespace, you can do it (with podman) like this:  
+`sudo podman run --network ns:/var/run/netns/<NAMESPACE> ...`
+
 ## Permanently via systemd services
 If you now, for example, have set up a dedicated server to seed your Hannah Montana Linux iso image, you can, with wgjail-quick, create systemd files that automatically, on boot:
 1. create the wireguard jail, then
@@ -106,6 +116,9 @@ Now you can copy these systemd files to `/etc/systemd/system` and enable them. T
 		* Audio does not work
 	+ Some applications are ok with that, like qbittorrent. Others, like Firefox, won't even start.
 	+ So, I would like to keep the "exec" command the way it works right now and not pile a lot of magic on top, but adding an "exec-gui" command that does that magic would probably be a nice thing to have for many users.
+- More info on containers and network namespaces, in addition to rootfull podman.
+	+ Does this also work with Docker?
+	+ Is there a way to make it work with a rootless podman container?
 	
 # Misc
 ## Create a manpage from this readme
