@@ -160,6 +160,13 @@ When you\[cq]re done, close the qbittorrent window, then:
 .P
 .PD
 Done, very easy.
+.SS Starting a podman container in the namespace
+If you want to start a container inside the network namespace, you can
+do it (with podman) like this:
+.PD 0
+.P
+.PD
+\f[CR]sudo podman run \-\-network ns:/var/run/netns/<NAMESPACE> ...\f[R]
 .SS Permanently via systemd services
 If you now, for example, have set up a dedicated server to seed your
 Hannah Montana Linux iso image, you can, with wgjail\-quick, create
