@@ -1,5 +1,5 @@
 Name:       wgjail-quick
-Version:    1.0.0
+Version:    1.1.0
 Release:    1%{?dist}
 Summary:    A tool to create a Wireguard jail for split tunneling and killswitch
 License:    GPL-3.0-or-later
@@ -11,9 +11,15 @@ Requires:   socat
 Requires:   bubblewrap
 
 %description
-Wgjail-quick gives you the ability to create a "Wireguard jail", i.e. a network namespace where a program that is running inside that namespace can only see and use the one wireguard connection you have given it. There are two main reasons why you would want to do this:
-1. For split tunneling, which means that only some of the programs on your pc shall use the wireguard vpn, while the rest just uses your normal network connection
-2. To prevent a program from using your normal internet connection in case the wireguard vpn connection is shut down / crashes (a killswitch).
+Wgjail-quick gives you the ability to create a "Wireguard jail", i.e. a network
+namespace where a program that is running inside that namespace can only see
+and use the one wireguard connection you have given it. There are two main
+reasons why you would want to do this:
+1. For split tunneling, which means that only some of the programs on your pc
+   shall use the wireguard vpn, while the rest just uses your normal network
+   connection
+2. To prevent a program from using your normal internet connection in case the
+   wireguard vpn connection is shut down / crashes (a killswitch).
 
 %global debug_package %{nil}
 
@@ -33,6 +39,9 @@ install -m 0644 man/wgjail-quick.8 %{buildroot}/%{_mandir}/man8
 %{_mandir}/man8/wgjail-quick.8*
 
 %changelog
+* Thu Aug 21 2025 Stephan Hegemann <stephanhegemann@pm.me> - 1.1.0
+- Resolved rpmlint warning (description-line-too-long)
+- Made improvements to resolve "shellcheck -s sh" warnings
 * Sat Aug 16 2025 Stephan Hegemann <stephanhegemann@pm.me> - 1.0.0
 - Now ready for RPM packaging
 * Sat Jan 11 2025 Stephan Hegemann <stephanhegemann@pm.me> - 0.1.1
