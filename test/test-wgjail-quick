@@ -1,0 +1,218 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# © 2025 Stephan Hegemann
+
+# This script tests the functionality of wgjail-quick
+# It assumes that wgjail-quick is installed and that you have a valid wireguard config file
+
+# Usage: ./wgjail-quick-test.sh </path/to/your/wireguard_config.conf>
+
+# Function to print the result of a test
+print_result() {
+	_test_name=$1
+	_success=$2
+	
+	if [ "$_success" = true ]
+	then
+		echo "$_test_name: Success"
+	elif [ "$_success" = false ]
+	then
+		echo "$_test_name: Failed"
+	elif [ "$_success" = skipped ]
+	then
+		echo "$_test_name: skipped"
+	else
+		exit 1
+	fi
+}
+
+# Function to test the up command
+test_up() {
+	echo "Testing the up command..."
+	if [ "$(id -u)" -eq 0 ]
+	then
+		# In case of previously failed down command, we try down again, just to be sure
+		wgjail-quick down "$wg_config"
+		if wgjail-quick up "$wg_config"
+		then
+			echo "The up command was successful."
+			up_success=true
+		else
+			echo "The up command failed."
+			up_success=false
+		fi
+	fi
+}
+
+# Function to test the down command
+test_down() {
+	echo "Testing the down command..."
+	if [ "$(id -u)" -eq 0 ]
+	then
+		if wgjail-quick down "$wg_config"
+		then
+			echo "The down command was successful."
+			down_success=true
+		else
+			echo "The down command failed."
+			down_success=false
+		fi
+	fi
+}
+
+# Function to test the exec command
+test_exec() {
+	echo "Testing the exec command..."
+	if [ "$(id -u)" -eq 0 ]
+	then
+		if wgjail-quick exec "$wg_config" "$username" "$cmd"
+		then
+			echo "The exec command was successful."
+			exec_success=true
+		else
+			echo "The exec command failed."
+			exec_success=false
+		fi
+	fi
+}
+
+# Function to test the portforward command
+test_portforward() {
+	echo "Testing the portforward command..."
+	if [ "$(id -u)" -eq 0 ]
+	then
+		timeout --preserve-status 10s wgjail-quick portforward "$wg_config" "$listen_address" "$port"
+		return_code=$?
+		# Return code 143 means, that SIGTERM was sent from the timeout command, which is ok, it does not mean portforward has failed.
+		if [ $return_code -eq 0 ] || [ $return_code -eq 143 ]
+		then
+			echo "The portforward command was successful."
+			portforward_success=true
+		else
+			echo "The portforward command failed."
+			portforward_success=false
+		fi
+	fi
+}
+
+# Function to test the generate-jail-service command
+test_generate_jail_service() {
+	echo "Testing the generate-jail-service command..."
+	if wgjail-quick generate-jail-service "$wg_config"
+	then
+		echo "The generate-jail-service command was successful."
+		generate_jail_service_success=true
+	else
+		echo "The generate-jail-service command failed."
+		generate_jail_service_success=false
+	fi
+}
+
+# Function to test the generate-cmd-service command
+test_generate_cmd_service() {
+	echo "Testing the generate-cmd-service command..."
+	if wgjail-quick generate-cmd-service "$wg_config" "$cmd"
+	then
+		echo "The generate-cmd-service command was successful."
+		generate_cmd_service_success=true
+	else
+		echo "The generate-cmd-service command failed."
+		generate_cmd_service_success=false
+	fi
+}
+
+# Function to test the generate-portforward-service command
+test_generate_portforward_service() {
+	echo "Testing the generate-portforward-service command..."
+	if wgjail-quick generate-portforward-service "$wg_config" "$listen_address" "$port"
+	then
+		echo "The generate-portforward-service command was successful."
+		generate_portforward_service_success=true
+	else
+		echo "The generate-portforward-service command failed."
+		generate_portforward_service_success=false
+	fi
+}
+
+# Function to print the summary of the tests
+print_summary() {
+	echo
+	echo "Summary of the tests:"
+	print_result "Up command" "$up_success"
+	print_result "Down command" "$down_success"
+	print_result "Exec command" "$exec_success"
+	print_result "Portforward command" "$portforward_success"
+	print_result "Generate jail service command" "$generate_jail_service_success"
+	print_result "Generate cmd service command" "$generate_cmd_service_success"
+	print_result "Generate portforward service command" "$generate_portforward_service_success"
+}
+
+print_help() {
+		>&2 echo "Usage: sudo wgjail-quick-test.sh </path/to/your/wireguard_config.conf>"
+		>&2 echo "You should run it as root, because otherwise, some tests can't be done."
+		>&2 echo "Available Options"
+		>&2 echo "-v = verbose"
+		exit 2
+}
+
+while getopts v option
+do
+		case $option in
+		v)	set -x;;
+		?)	print_help;;
+		esac
+done
+
+# Set the path to the wireguard config file
+shift $(($OPTIND - 1))
+wg_config="$*"
+
+# Set the username to use for the exec command
+username="$(whoami)"
+
+# Set the command to execute in the namespace
+cmd="echo 'Hello, World!'"
+
+# Set the port to forward
+port=9976
+
+# Set the listen address for the port forward
+listen_address="127.0.0.1"
+
+# Initialize variables to store the results of the tests
+up_success=skipped
+down_success=skipped
+exec_success=skipped
+portforward_success=skipped
+generate_jail_service_success=skipped
+generate_cmd_service_success=skipped
+generate_portforward_service_success=skipped
+
+# Check if we are root.
+if [ "$(id -u)" -ne 0 ]
+then
+	echo "You're not root, therefore, some tests must be skipped."
+fi
+
+
+test_up
+if [ "$up_success" = "true" ]
+then
+	test_exec
+	test_portforward
+	test_down
+fi
+
+tmp_test_dir="$(mktemp -d)"
+trap "rm -rf $tmp_test_dir" EXIT
+
+cd "$tmp_test_dir"
+test_generate_jail_service
+test_generate_cmd_service
+test_generate_portforward_service
+echo "ls -lah $tmp_test_dir"
+ls -lah "$tmp_test_dir"
+
+cd /tmp
+
+print_summary
