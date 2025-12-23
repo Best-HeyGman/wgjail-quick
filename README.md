@@ -93,7 +93,12 @@ Done, very easy.
 
 ## Starting a podman container in the namespace
 If you want to start a container inside the network namespace, you can do it (with podman) like this:  
-`sudo podman run --network ns:/var/run/netns/<NAMESPACE> ...`
+`sudo podman run --network ns:/var/run/netns/<NAMESPACE> ...`  
+This will also automatically use the correct resolv.conf for the namespace.  
+
+If you write a Quadlet, then adding this option is enough:  
+`Network=ns:/var/run/netns/<NAMESPACE>`  
+Also uses the correct resolv.conf automatically.
 
 ## Permanently via systemd services
 If you now, for example, have set up a dedicated server to seed your Hannah Montana Linux iso image, you can, with wgjail-quick, create systemd files that automatically, on boot:
