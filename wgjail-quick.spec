@@ -1,5 +1,5 @@
 Name:       wgjail-quick
-Version:    1.1.0
+Version:    1.1.1
 Release:    1%{?dist}
 Summary:    A tool to create a Wireguard jail for split tunneling and killswitch
 License:    GPL-3.0-or-later
@@ -39,6 +39,9 @@ install -m 0644 man/wgjail-quick.8 %{buildroot}/%{_mandir}/man8
 %{_mandir}/man8/wgjail-quick.8*
 
 %changelog
+* Wed Apr 22 2026 Stephan Hegemann <stephanhegemann@pm.me> - 1.1.1
+- Added instructions for usage with Quadlets
+- Fixed typos
 * Thu Aug 21 2025 Stephan Hegemann <stephanhegemann@pm.me> - 1.1.0
 - Resolved rpmlint warning (description-line-too-long)
 - Made improvements to resolve "shellcheck -s sh" warnings
